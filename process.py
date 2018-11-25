@@ -6,11 +6,8 @@ import pandas as pd
 short_series = 30 * 5
 normalize = True
 
-def process_data(datasets):
-    fragments = []
-    for dataset in datasets:
-        fragments.append(pd.read_csv("preprocessed/%s.csv" % dataset))
-    df = pd.concat(fragments)
+def process_dataset(dataset):
+    df = pd.read_csv("preprocessed/%s.csv" % dataset)
 
     x_data = df["acc_x"]
     x_delta_data = np.subtract(x_data[1:], x_data[:-1])
@@ -30,16 +27,49 @@ def process_data(datasets):
         values.append(val)
 
     if normalize:
-        values /= np.amax(values)
+        if not np.amax(values) < 0.00001:
+            values /= np.amax(values)
 
-    plt.plot(np.arange(len(x_delta_data)-short_series), values)
-    plt.savefig("output/all.png")
-    plt.clf()
-
-    pd.DataFrame({
+    return pd.DataFrame({
         "lat": df["lat"][:-short_series-1],
         "lng": df["lng"][:-short_series-1],
         "score": values,
-    }).to_csv("output/data.csv", index=False)
+    })
+
+def process_data(datasets):
+    fragments = []
+
+    for i in range(len(datasets)):
+        fragments.append(process_dataset(datasets[i]))
+
+        # Filling some gaps. Sorry for that.
+        if i == 0:
+            fragments.append(pd.DataFrame({
+                "lat": [60.17841897910478],
+                "lng": [24.79882939720973],
+                "score": fragments[-1].tail(1)["score"],
+            }))
+        elif i == 1 or i == 3 or i == 4:
+            fragments.append(pd.DataFrame({
+                "lat": [60.1737616],
+                "lng": [24.8014866],
+                "score": fragments[-1].tail(1)["score"],
+            }))
+
+        # This is for Frontend to trigger a change of tracks.
+        if i != len(datasets) - 1:
+            fragments.append(pd.DataFrame({
+                "lat": [0],
+                "lng": [0],
+                "score": [-1],
+            }))
+
+    df = pd.concat(fragments)
+
+    plt.plot(np.arange(len(df["score"])), df["score"])
+    plt.savefig("output/all.png")
+    plt.clf()
+
+    df.to_csv("output/data.csv", index=False)
 
 process_data(["ride1", "ride1_extension", "ride2", "ride2_extension", "ride3"])
